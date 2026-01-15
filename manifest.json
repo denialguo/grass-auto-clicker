@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Simple Auto Clicker",
+  "version": "1.1",
+  "description": "A clean, lightweight auto clicker with follow-mouse and element-picker modes.",
+  "permissions": ["activeTab", "storage"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "icons": {
+    "128": "icon128.png"
+  }
+}
