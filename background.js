@@ -1,22 +1,28 @@
 function handleToggle() {
-  chrome.storage.local.get(['isRunning', 'interval', 'mode'], (data) => {
+  chrome.storage.local.get(['isRunning', 'interval', 'mode', 'targetTabId'], (data) => {
     const newState = !data.isRunning;
-    
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.storage.local.set({ isRunning: newState });
-        
-        if (newState) {
-          chrome.storage.local.set({ targetTabId: tabs[0].id });
-        }
 
-        chrome.tabs.sendMessage(tabs[0].id, {
-          action: "toggle",
-          state: newState,
-          interval: data.interval || 1000,
-          mode: data.mode || "follow"
-        });
-      }
+    // stopping targets the tab that's actually running; starting targets whatever's active
+    const getTabId = (data.isRunning && data.targetTabId)
+      ? (cb) => cb(data.targetTabId)
+      : (cb) => chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => cb(tabs[0]?.id));
+
+    getTabId((tabId) => {
+      if (!tabId) return;
+
+      chrome.tabs.sendMessage(tabId, {
+        action: "toggle",
+        state: newState,
+        interval: data.interval || 1000,
+        mode: data.mode || "follow"
+      }, (response) => {
+        // no content script here (restricted page, stale tab) - don't lie about running state
+        if (chrome.runtime.lastError || !response) {
+          chrome.storage.local.set({ isRunning: false, targetTabId: null });
+          return;
+        }
+        chrome.storage.local.set({ isRunning: newState, targetTabId: newState ? tabId : null });
+      });
     });
   });
 }
