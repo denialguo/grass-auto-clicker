@@ -1,13 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
   const btnToggle = document.getElementById('btn-toggle');
   const btnPick = document.getElementById('btn-pick');
+  const btnPickCoord = document.getElementById('btn-pick-coord'); // new coord button
   const btnSetKey = document.getElementById('btn-set-key');
   const inputCps = document.getElementById('cps');
   const statusText = document.getElementById('status-text');
   
-  // UI Elements
   const radioFollow = document.querySelector('input[value="follow"]');
   const radioFixed = document.querySelector('input[value="fixed"]');
+  const radioCoord = document.querySelector('input[value="coordinate"]'); // new radio
 
   let typingTimer;
   let isRecordingKey = false;
@@ -17,13 +18,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (data.shortcut) {
       displayShortcut(data.shortcut);
     } else {
+      btnSetKey.innerText = "Alt + Shift + S";
     }
-
 
     if (data.mode) {
       const modeInput = document.querySelector(`input[value="${data.mode}"]`);
       if (modeInput) modeInput.checked = true;
-      togglePickBtn(data.mode === 'fixed');
+      
+      // setup ui based on saved mode
+      if (btnPick) btnPick.classList.toggle('hidden', data.mode !== 'fixed');
+      if (btnPickCoord) btnPickCoord.classList.toggle('hidden', data.mode !== 'coordinate');
+      
       if (data.mode === 'fixed') checkElementStatus();
     }
     
@@ -31,7 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const savedCps = Math.round(1000 / data.interval);
       inputCps.value = savedCps > 0 ? savedCps : 10;
     }
-
 
     updateStatusText(data.isRunning);
     updateToggleButton(data.isRunning);
@@ -50,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSetKey.addEventListener('click', () => {
     isRecordingKey = true;
     btnSetKey.innerText = "Press new key...";
-    btnSetKey.style.background = "#fff9c4"; // Yellow
+    btnSetKey.style.background = "#fff9c4"; 
     btnSetKey.style.borderColor = "#fbc02d";
   });
 
@@ -91,7 +95,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSetKey.innerText = parts.join(" + ");
   }
 
-  // --- 4. STANDARD INPUT HANDLING ---
   inputCps.addEventListener('input', () => {
     clearTimeout(typingTimer);
     typingTimer = setTimeout(() => {
@@ -102,32 +105,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 500); 
   });
 
-  [radioFollow, radioFixed].forEach(radio => {
+  // handle radio switching
+  [radioFollow, radioFixed, radioCoord].forEach(radio => {
+    if (!radio) return;
     radio.addEventListener('change', (e) => {
       const mode = e.target.value;
-      togglePickBtn(mode === 'fixed');
+      
+      const isRunning = btnToggle.classList.contains('stop');
+      if (!isRunning) {
+        btnPick.classList.toggle('hidden', mode !== 'fixed');
+        if (btnPickCoord) btnPickCoord.classList.toggle('hidden', mode !== 'coordinate');
+      }
+
       chrome.storage.local.set({ mode: mode });
       if (mode === 'fixed') checkElementStatus();
     });
   });
 
-  // --- 5. HELPER FUNCTIONS ---
-  function togglePickBtn(show) {
-    const isRunning = btnToggle.classList.contains('stop');
-    if (!isRunning) {
-        btnPick.classList.toggle('hidden', !show);
-    }
-  }
-
   function toggleInputs(isEnabled) {
     inputCps.disabled = !isEnabled;
     radioFollow.disabled = !isEnabled;
     radioFixed.disabled = !isEnabled;
+    if (radioCoord) radioCoord.disabled = !isEnabled;
+
     if (isEnabled) {
-       const isFixed = radioFixed.checked;
-       btnPick.classList.toggle('hidden', !isFixed);
+       const modeRadio = document.querySelector('input[name="mode"]:checked');
+       const mode = modeRadio ? modeRadio.value : 'follow';
+       btnPick.classList.toggle('hidden', mode !== 'fixed');
+       if (btnPickCoord) btnPickCoord.classList.toggle('hidden', mode !== 'coordinate');
     } else {
        btnPick.classList.add('hidden');
+       if (btnPickCoord) btnPickCoord.classList.add('hidden');
     }
   }
 
@@ -145,10 +153,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // selection listeners
   btnPick.addEventListener('click', () => {
     window.close();
     sendMessageToActiveTab({ action: "start_selection" });
   });
+
+  if (btnPickCoord) {
+    btnPickCoord.addEventListener('click', () => {
+      window.close();
+      sendMessageToActiveTab({ action: "start_coord_selection" });
+    });
+  }
 
   btnToggle.addEventListener('click', () => {
     chrome.storage.local.get(['isRunning', 'interval', 'mode'], (data) => {
@@ -167,7 +183,6 @@ document.addEventListener('DOMContentLoaded', () => {
         mode: mode 
       }, (response) => {
         if (response && response.status === "success") {
-           // We do NOT update UI here; the storage listener handles it!
            chrome.storage.local.set({ isRunning: newState, interval: interval, mode: mode });
         } else {
            statusText.innerText = "Error: Refresh Page";
